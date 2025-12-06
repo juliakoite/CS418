@@ -1,0 +1,7 @@
+png 200 300 outfilename.png
+position 2   20 200  150 90  40 290
+ignore this line since "ignore" is not a keyword you know 
+likewise ignore this line, which also starts with an unknown keyword
+
+color 4  255 127 0 255  0 127 255 127  0 0 0 255
+drawPixels 2
