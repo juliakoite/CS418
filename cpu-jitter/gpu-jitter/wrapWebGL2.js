@@ -1,4 +1,4 @@
-<script src="wrapWebGL2.js"></script>
+
 
 /*
  * This file does the following:
