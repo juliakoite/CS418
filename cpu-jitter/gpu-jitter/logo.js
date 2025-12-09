@@ -1,4 +1,5 @@
 const illini_orange = [1, .373, .02];
+let buffer_global;
 
 // function toClipX(x) {
 //     return x/10*2 - 1;
@@ -79,6 +80,13 @@ for(let i = 0; i < paper_vertices.length; i+=2) {
 }
 
 const vertices = new Float32Array(v);
+const dynamic_vertices = new Float32Array(vertices);
+
+function func_calls() {
+    //buffer_global = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer_global)
+    gl.bufferData(gl.ARRAY_BUFFER, dynamic_vertices, gl.DYNAMIC_DRAW)
+}
 
 
 
@@ -90,12 +98,13 @@ async function setup() {
     window.program = compile(vs,fs)
 
 
-    const vbo = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW)
+    buffer_global = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer_global)
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW)
 
     const ibo = gl.createBuffer()
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
+    
     const triangles = new Uint16Array(tri_idx)
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, triangles, gl.STATIC_DRAW)
 
@@ -187,11 +196,15 @@ function draw(seconds) {
 
     gl.uniform1f(program.uniforms.time, time);
 
-    // gl.uniform1i(program.uniforms.count, count)
+    let i;
 
-    // const connection = gl.POINTS
-    // const offset = 0                          // unused here, but required
-    //gl.drawArrays(connection, offset, count)
+    for (i = 0; i < vertices.length; i++) {
+        dynamic_vertices[i] = v[i] + (Math.random() - .5) * .05;
+        dynamic_vertices[i+1] = v[i+1] + (Math.random()- .5) * .03;
+
+    }
+
+    func_calls();
 
     gl.drawElements(gl.TRIANGLES, tri_idx.length, gl.UNSIGNED_SHORT, 0);
 
