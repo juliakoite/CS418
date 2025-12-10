@@ -1,4 +1,7 @@
+const IlliniBlue = new Float32Array([0.075, 0.16, 0.292, 1]);
+const IlliniOrange = new Float32Array([1, 0.373, 0.02, 1]);
 
+let gl;
 let program;
 let tetrahedronVAO, octahedronVAO;
 let tetrahedronIndexCount, octahedronIndexCount;
@@ -35,6 +38,7 @@ function createProgram(gl, vertexShader, fragmentShader) {
     return program;
 }
 
+
 function createVAO(gl, positions, colors, indices) {
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -44,36 +48,37 @@ function createVAO(gl, positions, colors, indices) {
     const flatColors = colors.flat();
     const flatIndices = indices.flat();
     
-    // Position buffer (location 0)
+
     const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatPositions), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
     
-    // Color buffer (location 1)
+
     const colorBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flatColors), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
     
-    // Index buffer
+
     const indexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(flatIndices), gl.STATIC_DRAW);
     
-    gl.bindVertexArray(null);
+    //gl.bindVertexArray(0);
     
     return { vao, indexCount: flatIndices.length };
 }
 
+
 async function setup() {
     console.log("in setup");
-    window.gl = document.querySelector('canvas').getContext('webgl2')
-    const vs = await fetch('./vertex.glsl').then(res => res.text())
-    const fs = await fetch('./fragment.glsl').then(res => res.text())
-    window.program = compile(vs,fs)
+    gl = document.querySelector('canvas').getContext('webgl2');
+    const vs = await fetch('./vertex.glsl').then(res => res.text());
+    const fs = await fetch('./fragment.glsl').then(res => res.text());
+    program = compile(vs,fs);
     
     // Create VAOs
     const tetraData = createVAO(gl, tetrahedron.positions, tetrahedron.colors, tetrahedron.indices);
@@ -87,13 +92,17 @@ async function setup() {
     // Enable depth testing
     gl.enable(gl.DEPTH_TEST);
     
-    // Start animation
+
     fillScreen();
     window.addEventListener('resize', fillScreen);
-    requestAnimationFrame(draw);
+    
+    requestAnimationFrame(tick);
 }
 
+
+
 function compile(vs_source, fs_source) {
+    console.log("compiling shader");
     const vs = gl.createShader(gl.VERTEX_SHADER)
     gl.shaderSource(vs, vs_source)
     gl.compileShader(vs)
@@ -125,6 +134,7 @@ function compile(vs_source, fs_source) {
         uniforms[info.name] = gl.getUniformLocation(program, info.name)
     }
     program.uniforms = uniforms;
+    console.log("Found uniforms:", uniforms)
 
     return program;
 }
@@ -139,152 +149,177 @@ function fillScreen() {
     canvas.height = canvas.clientHeight
     canvas.style.width = ''
     canvas.style.height = ''
-    if (window.gl) {
+    if (gl) {
         gl.viewport(0,0, canvas.width, canvas.height)
         window.p = m4perspNegZ(0.1, 10, 1.5, canvas.width, canvas.height)
+        console.log("p =", window.p);
     }
 }
 
 function drawBody(vao, indexCount, modelMatrix) {
+    console.log("drawBody called - vao:", vao, "indexCount:", indexCount);
     gl.bindVertexArray(vao);
+
+    const view = m4view([0, 10, 25], [0, 0, 0], [0, 1, 0]);
+    const mv = m4mul(view, modelMatrix);
+    const mvLoc = gl.getUniformLocation(program, 'mv');
+    const pLoc = gl.getUniformLocation(program, 'p');
+
+    // console.log("program =", program);
+    //  console.log("mv =", mv);
+    //  console.log("p =", window.p);
+
+    gl.uniformMatrix4fv(mvLoc, false, mv);
+    gl.uniformMatrix4fv(pLoc, false, window.p);
     
-    const aspect = gl.canvas.width / gl.canvas.height;
-    const projection = Matrix.perspective(Math.PI / 4, aspect, 0.1, 100);
-    const view = Matrix.lookAt([0, 5, 15], [0, 0, 0], [0, 1, 0]);
+    // const aspect = gl.canvas.width / gl.canvas.height;
+    // const projection = m4perspNegZ(Math.PI / 4, aspect, 0.1, 100);
+    // const view = m4view([0, 5, 15], [0, 0, 0], [0, 1, 0]);
     
-    let mvp = Matrix.multiply(projection, view);
-    mvp = Matrix.multiply(mvp, modelMatrix);
+    // let mvp =m4mul(projection, view);
+    // mvp = m4mul(mvp, modelMatrix);
     
-    const mvpLoc = gl.getUniformLocation(program, 'uMVP');
-    gl.uniformMatrix4fv(mvpLoc, false, mvp);
+    // const mvpLoc = gl.getUniformLocation(program, 'uMVP');
+    // gl.uniformMatrix4fv(mvpLoc, false, mvp);
     
     gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0);
+
 }
 
-function draw(timestamp) {
-    const seconds = timestamp / 1000;
-    
-    gl.clearColor(0.1, 0.1, 0.15, 1);
+function tick(milliseconds) {
+    const seconds = milliseconds / 1000
+    draw(seconds)
+    requestAnimationFrame(tick) // <- only call this here, nowhere else
+}
+
+function draw(seconds) {
+    //const seconds = milliseconds / 1000;
+    //console.log("Drawing frame at", seconds, "seconds"); // ADD THIS
+
+    gl.clearColor(...IlliniBlue);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     
     gl.useProgram(program);
+    //gl.clear(gl.COLOR_BUFFER_BIT)
+    //gl.useProgram(program)
+
+    //gl.bindVertexArray(vao)
+
+    //gl.uniform4fv(program.uniforms.color, IlliniOrange)
     
-    // Sun - large octahedron at origin, spinning
-    const sunRotation = (seconds / 2) * Math.PI * 2; // Full rotation every 2 seconds
-    const sunModel = Matrix.multiply(
-        Matrix.rotateY(sunRotation),
-        Matrix.scale(2, 2, 2)
+    const sunRotation = (seconds / 2) * Math.PI * 2; 
+    const sunModel = m4mul(
+        m4rotY(sunRotation),
+        m4scale(2, 2, 2)
     );
+
     drawBody(octahedronVAO, octahedronIndexCount, sunModel);
     
-    // Earth - smaller octahedron orbiting and spinning
-    const earthOrbitPeriod = 4; // seconds for one orbit
-    const earthSpinPeriod = 0.5; // seconds for one spin
+    const earthOrbitPeriod = 4;
+    const earthSpinPeriod = 0.5; 
     const earthOrbitAngle = (seconds / earthOrbitPeriod) * Math.PI * 2;
     const earthSpinAngle = (seconds / earthSpinPeriod) * Math.PI * 2;
     const earthDistance = 5;
-    
-    const earthModel = Matrix.multiply(
-        Matrix.rotateY(earthOrbitAngle),
-        Matrix.multiply(
-            Matrix.translate(earthDistance, 0, 0),
-            Matrix.multiply(
-                Matrix.rotateY(earthSpinAngle),
-                Matrix.scale(0.8, 0.8, 0.8)
-            )
-        )
+
+
+    // const m_scale = m4scale(.8,.8,.8);
+    // const m_rotate_spin = m4rotY(earthSpinAngle);
+    // const m_prod = m4mul(m_rotate_spin, m_scale);
+    // const m_trans = m4trans(earthDistance, 0, 0);
+    // const m_rotate_y = m4rotY(earthOrbitAngle);
+
+        const earthModel = m4mul(
+        m4rotY(earthOrbitAngle),
+        m4trans(earthDistance, 0, 0),
+        m4rotY(earthSpinAngle),
+        m4scale(0.8, 0.8, 0.8)
     );
+
+    //m_final_prod = m4mul(m_trans, m_prod);
+    //const earthModel = m4mul(m_rotate_y, m_final_prod);
+
+
     drawBody(octahedronVAO, octahedronIndexCount, earthModel);
     
-    // Mars - 1.6x farther, 1.9x slower orbit, 2.2x slower spin
     const marsOrbitPeriod = earthOrbitPeriod * 1.9;
     const marsSpinPeriod = earthSpinPeriod * 2.2;
     const marsOrbitAngle = (seconds / marsOrbitPeriod) * Math.PI * 2;
     const marsSpinAngle = (seconds / marsSpinPeriod) * Math.PI * 2;
     const marsDistance = earthDistance * 1.6;
     
-    const marsModel = Matrix.multiply(
-        Matrix.rotateY(marsOrbitAngle),
-        Matrix.multiply(
-            Matrix.translate(marsDistance, 0, 0),
-            Matrix.multiply(
-                Matrix.rotateY(marsSpinAngle),
-                Matrix.scale(0.7, 0.7, 0.7)
-            )
-        )
+    const marsModel = m4mul(
+        m4rotY(marsOrbitAngle),
+        m4trans(marsDistance, 0, 0),
+        m4rotY(marsSpinAngle),
+        m4scale(0.7, 0.7, 0.7)
     );
+
     drawBody(octahedronVAO, octahedronIndexCount, marsModel);
     
-    // Moon - orbits Earth, tidally locked
-    const moonOrbitPeriod = 2; // Faster than Earth's orbit, slower than Earth's spin
+    const moonOrbitPeriod = 2; 
     const moonOrbitAngle = (seconds / moonOrbitPeriod) * Math.PI * 2;
     const moonDistance = 1.5;
     
-    const moonModel = Matrix.multiply(
-        Matrix.rotateY(earthOrbitAngle),
-        Matrix.multiply(
-            Matrix.translate(earthDistance, 0, 0),
-            Matrix.multiply(
-                Matrix.rotateY(moonOrbitAngle),
-                Matrix.multiply(
-                    Matrix.translate(moonDistance, 0, 0),
-                    Matrix.multiply(
-                        Matrix.rotateY(-moonOrbitAngle), // Tidally locked
-                        Matrix.scale(0.3, 0.3, 0.3)
-                    )
-                )
-            )
-        )
+    //used llm to understand some matrix multiplications concepts
+ 
+       const moonModel = m4mul(
+        m4rotY(earthOrbitAngle),
+        m4trans(earthDistance, 0, 0),
+        m4rotY(moonOrbitAngle),
+        m4trans(moonDistance, 0, 0),
+        m4rotY(-moonOrbitAngle),
+        m4scale(0.3, 0.3, 0.3)
+
     );
+
     drawBody(tetrahedronVAO, tetrahedronIndexCount, moonModel);
     
-    // Phobos - orbits Mars fast, tidally locked
-    const phobosOrbitPeriod = 0.3; // Several times faster than Mars spins
+    const phobosOrbitPeriod = 0.3; 
     const phobosOrbitAngle = (seconds / phobosOrbitPeriod) * Math.PI * 2;
     const phobosDistance = 1.2;
     
-    const phobosModel = Matrix.multiply(
-        Matrix.rotateY(marsOrbitAngle),
-        Matrix.multiply(
-            Matrix.translate(marsDistance, 0, 0),
-            Matrix.multiply(
-                Matrix.rotateY(phobosOrbitAngle),
-                Matrix.multiply(
-                    Matrix.translate(phobosDistance, 0, 0),
-                    Matrix.multiply(
-                        Matrix.rotateY(-phobosOrbitAngle), // Tidally locked
-                        Matrix.scale(0.25, 0.25, 0.25)
-                    )
-                )
-            )
-        )
+    const phobosModel = m4mul(
+    m4rotY(marsOrbitAngle),
+    m4trans(marsDistance, 0, 0),
+    m4rotY(phobosOrbitAngle),
+    m4trans(phobosDistance, 0, 0),
+    m4rotY(-phobosOrbitAngle),
+    m4scale(0.25, 0.25, 0.25)
     );
     drawBody(tetrahedronVAO, tetrahedronIndexCount, phobosModel);
     
-    // Deimos - half size of Phobos, twice as far, slower orbit, tidally locked
-    const deimosOrbitPeriod = marsSpinPeriod * 0.9; // Only a little faster than Mars spins
+    const deimosOrbitPeriod = marsSpinPeriod * 0.9; 
     const deimosOrbitAngle = (seconds / deimosOrbitPeriod) * Math.PI * 2;
     const deimosDistance = phobosDistance * 2;
     
-    const deimosModel = Matrix.multiply(
-        Matrix.rotateY(marsOrbitAngle),
-        Matrix.multiply(
-            Matrix.translate(marsDistance, 0, 0),
-            Matrix.multiply(
-                Matrix.rotateY(deimosOrbitAngle),
-                Matrix.multiply(
-                    Matrix.translate(deimosDistance, 0, 0),
-                    Matrix.multiply(
-                        Matrix.rotateY(-deimosOrbitAngle), // Tidally locked
-                        Matrix.scale(0.125, 0.125, 0.125)
-                    )
-                )
-            )
-        )
+    const deimosModel = m4mul(
+    m4rotY(marsOrbitAngle),
+    m4trans(marsDistance, 0, 0),
+    m4rotY(deimosOrbitAngle),
+    m4trans(deimosDistance, 0, 0),
+    m4rotY(-deimosOrbitAngle),
+    m4scale(0.125, 0.125, 0.125)
     );
+
     drawBody(tetrahedronVAO, tetrahedronIndexCount, deimosModel);
     
-    requestAnimationFrame(draw);
 }
 
-window.addEventListener('DOMContentLoaded', setup);
+window.addEventListener('load', setup)
+
+//from code example
+
+// window.addEventListener('load', async (event) => {
+//     window.gl = document.querySelector('canvas').getContext('webgl2',
+//         // optional configuration object: see https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
+//         {antialias: false, depth:true, preserveDrawingBuffer:true}
+//     )
+//     let vs = document.querySelector('./vertex.glsl').getContext(webgl2)
+//     let fs = document.querySelector('./fragment.glsl').getContext(webgl2)
+//     window.program = compileShader(vs,fs)
+//     gl.enable(gl.DEPTH_TEST)
+//     window.geom = setupGeomery(tetrahedron)
+//     fillScreen()
+//     window.addEventListener('resize', fillScreen)
+//     requestAnimationFrame(tick)
+// })
